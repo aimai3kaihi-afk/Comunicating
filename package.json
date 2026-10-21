@@ -1,0 +1,9 @@
+{
+  "name": "hitokoto-memo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ログイン不要の日本語チャット＆共有メモ帳",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}

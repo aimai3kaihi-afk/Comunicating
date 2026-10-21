@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ひとことメモ — ログイン不要のチャット＆共有メモ</title>
+<style>
+  :root {
+    --bg: #faf8f5; --panel: #ffffff; --ink: #2b2a28; --sub: #8a857d;
+    --line: #e8e3da; --accent: #d9622b; --accent-ink: #fff; --mine: #fbe9df; --other: #f1eee8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1b19; --panel: #262522; --ink: #ece8e1; --sub: #9b958b;
+      --line: #3a3834; --accent: #e8794a; --accent-ink: #1c1b19; --mine: #4a3025; --other: #33312d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  .hidden { display: none !important; }
+
+  /* ---- トップ ---- */
+  #landing { max-width: 520px; margin: 0 auto; padding: 14vh 20px 40px; }
+  #landing h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: .02em; }
+  #landing p.lead { color: var(--sub); margin: 0 0 28px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .card + .card { margin-top: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--bg);
+  }
+  input[type=text]:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .btn {
+    border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; white-space: nowrap;
+  }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .note { color: var(--sub); font-size: 13px; margin: 10px 0 0; }
+
+  /* ---- 部屋 ---- */
+  #room { height: 100%; display: flex; flex-direction: column; max-width: 760px; margin: 0 auto; }
+  header.bar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header.bar a.home { text-decoration: none; color: var(--sub); font-size: 20px; line-height: 1; }
+  header.bar .title { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header.bar .live { font-size: 12px; color: var(--sub); }
+  header.bar .live::before { content: "●"; margin-right: 4px; color: #c9382f; }
+  header.bar .live.on::before { color: #3a9b57; }
+  .tabs { display: flex; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .tabs button {
+    flex: 1; padding: 10px; background: none; border: 0; border-bottom: 3px solid transparent;
+    cursor: pointer; color: var(--sub); font-weight: 700;
+  }
+  .tabs button[aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); }
+
+  #chatPane, #memoPane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .empty { color: var(--sub); text-align: center; margin: auto; }
+  .msg { max-width: 82%; align-self: flex-start; }
+  .msg .meta { font-size: 12px; color: var(--sub); margin: 0 4px 2px; }
+  .msg .bubble {
+    background: var(--other); border-radius: 14px; padding: 8px 12px;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .msg.mine { align-self: flex-end; }
+  .msg.mine .meta { text-align: right; }
+  .msg.mine .bubble { background: var(--mine); }
+  .bubble a { color: var(--accent); }
+
+  form.compose { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); }
+  form.compose .top { display: flex; gap: 8px; align-items: center; }
+  form.compose .top label { font-size: 12px; color: var(--sub); }
+  #nick { max-width: 160px; flex: none; padding: 6px 10px; }
+  #input {
+    flex: 1; resize: none; max-height: 140px; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--bg);
+  }
+  form.compose .send { display: flex; gap: 8px; align-items: flex-end; }
+
+  #memoPane { padding: 14px; gap: 8px; }
+  #memo {
+    flex: 1; width: 100%; resize: none; padding: 14px; border: 1px solid var(--line);
+    border-radius: 12px; background: var(--panel); line-height: 1.7;
+  }
+  .memo-status { font-size: 12px; color: var(--sub); text-align: right; }
+  #toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 999px; font-size: 13px;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- トップページ -->
+<main id="landing" class="hidden">
+  <h1>ひとことメモ</h1>
+  <p class="lead">ログイン不要。部屋の名前を決めるだけで、チャットと共有メモが使えます。</p>
+
+  <div class="card">
+    <h2>部屋に入る / 作る</h2>
+    <form id="joinForm" class="row">
+      <input type="text" id="roomName" placeholder="部屋の名前（例：うちの家族）" maxlength="40" autocomplete="off">
+      <button class="btn" type="submit">入る</button>
+    </form>
+    <p class="note">同じ名前を入力すれば、誰でも同じ部屋に入れます。</p>
+  </div>
+
+  <div class="card">
+    <h2>内緒の部屋を作る</h2>
+    <button class="btn ghost" id="randomRoom" type="button">推測されにくいURLで作成</button>
+    <p class="note">ランダムな部屋名を作ります。URLを知っている人だけが入れます。</p>
+  </div>
+
+  <p class="note">※ 認証はありません。URLを知っていれば誰でも読み書きできるので、パスワードなどの大事な情報は書かないでください。</p>
+</main>
+
+<!-- 部屋 -->
+<section id="room" class="hidden">
+  <header class="bar">
+    <a class="home" href="/" title="トップへ">‹</a>
+    <div class="title" id="roomTitle"></div>
+    <span class="live" id="live">接続中</span>
+    <button class="btn ghost" id="copyUrl" type="button">URLをコピー</button>
+  </header>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabChat" aria-selected="true">チャット</button>
+    <button role="tab" id="tabMemo" aria-selected="false">共有メモ</button>
+  </div>
+
+  <div id="chatPane">
+    <div id="log" aria-live="polite"></div>
+    <form class="compose" id="form">
+      <div class="top">
+        <label for="nick">名前</label>
+        <input type="text" id="nick" maxlength="20" placeholder="名無しさん" autocomplete="nickname">
+      </div>
+      <div class="send">
+        <textarea id="input" rows="1" maxlength="1000" placeholder="メッセージ（Enterで送信 / Shift+Enterで改行）"></textarea>
+        <button class="btn" type="submit">送信</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="memoPane" class="hidden">
+    <textarea id="memo" maxlength="20000" placeholder="ここに書いたメモは、この部屋の全員にリアルタイムで共有されます"></textarea>
+    <div class="memo-status" id="memoStatus">—</div>
+  </div>
+</section>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const clientId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  // ---------- ルーティング ----------
+  const m = location.pathname.match(/^\/r\/(.+?)\/?$/);
+  if (!m) { initLanding(); return; }
+  let room;
+  try { room = decodeURIComponent(m[1]); } catch { location.replace('/'); return; }
+  initRoom(room);
+
+  // ---------- トップ ----------
+  function initLanding() {
+    $('landing').classList.remove('hidden');
+    $('joinForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = $('roomName').value.trim();
+      if (!name) { $('roomName').focus(); return; }
+      location.href = '/r/' + encodeURIComponent(name);
+    });
+    $('randomRoom').addEventListener('click', () => {
+      const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+      const a = new Uint8Array(10); crypto.getRandomValues(a);
+      const id = Array.from(a, (x) => chars[x % chars.length]).join('');
+      location.href = '/r/' + id;
+    });
+  }
+
+  // ---------- 部屋 ----------
+  function initRoom(room) {
+    document.title = room + ' — ひとことメモ';
+    $('room').classList.remove('hidden');
+    $('roomTitle').textContent = room;
+
+    const api = '/api/r/' + encodeURIComponent(room);
+    const log = $('log'), input = $('input'), nick = $('nick'), memo = $('memo');
+    const seen = new Set();
+    let lastMemoSent = null, memoTimer = null;
+
+    try { nick.value = localStorage.getItem('nick') || ''; } catch {}
+    nick.addEventListener('change', () => { try { localStorage.setItem('nick', nick.value.trim()); } catch {} });
+
+    // タブ
+    function tab(which) {
+      const chat = which === 'chat';
+      $('chatPane').classList.toggle('hidden', !chat);
+      $('memoPane').classList.toggle('hidden', chat);
+      $('tabChat').setAttribute('aria-selected', chat);
+      $('tabMemo').setAttribute('aria-selected', !chat);
+      if (chat) scrollBottom(true);
+    }
+    $('tabChat').onclick = () => tab('chat');
+    $('tabMemo').onclick = () => tab('memo');
+
+    function toast(t) {
+      const el = $('toast'); el.textContent = t; el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 1600);
+    }
+    $('copyUrl').onclick = async () => {
+      try { await navigator.clipboard.writeText(location.href); toast('URLをコピーしました'); }
+      catch { toast('コピーできませんでした'); }
+    };
+
+    // ---------- チャット表示 ----------
+    function linkify(el, text) {
+      const re = /https?:\/\/[^\s<>"']+/g;
+      let last = 0, mt;
+      while ((mt = re.exec(text))) {
+        if (mt.index > last) el.append(text.slice(last, mt.index));
+        const a = document.createElement('a');
+        a.href = mt[0]; a.textContent = mt[0]; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow';
+        el.append(a);
+        last = mt.index + mt[0].length;
+      }
+      if (last < text.length) el.append(text.slice(last));
+    }
+    function fmtTime(t) {
+      const d = new Date(t), now = new Date();
+      const hm = d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+      return d.toDateString() === now.toDateString()
+        ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+    }
+    function nearBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight < 80; }
+    function scrollBottom(force) { if (force || nearBottom()) log.scrollTop = log.scrollHeight; }
+
+    function addMessage(msg) {
+      if (seen.has(msg.id)) return;
+      seen.add(msg.id);
+      const empty = log.querySelector('.empty'); if (empty) empty.remove();
+      const stick = nearBottom() || msg.cid === clientId;
+      const wrap = document.createElement('div');
+      wrap.className = 'msg' + (msg.cid === clientId ? ' mine' : '');
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = `${msg.name}  ${fmtTime(msg.at)}`;
+      const bubble = document.createElement('div'); bubble.className = 'bubble';
+      linkify(bubble, msg.text);
+      wrap.append(meta, bubble);
+      log.append(wrap);
+      if (stick) scrollBottom(true);
+    }
+    function showEmpty() {
+      if (log.children.length) return;
+      const d = document.createElement('div'); d.className = 'empty';
+      d.textContent = 'まだ発言がありません。最初のひとことをどうぞ。';
+      log.append(d);
+    }
+
+    // ---------- 初期読み込み ----------
+    async function load() {
+      const r = await fetch(api, { cache: 'no-store' });
+      if (!r.ok) throw new Error('load failed');
+      const data = await r.json();
+      data.messages.forEach(addMessage);
+      showEmpty();
+      if (document.activeElement !== memo && memo.value !== data.memo) {
+        memo.value = data.memo; lastMemoSent = data.memo;
+      }
+      scrollBottom(true);
+    }
+
+    // ---------- リアルタイム ----------
+    function connect() {
+      const es = new EventSource(api + '/events');
+      es.onopen = () => { $('live').textContent = 'リアルタイム'; $('live').classList.add('on'); load().catch(() => {}); };
+      es.onerror = () => { $('live').textContent = '再接続中'; $('live').classList.remove('on'); };
+      es.addEventListener('message', (e) => addMessage(JSON.parse(e.data)));
+      es.addEventListener('memo', (e) => {
+        const d = JSON.parse(e.data);
+        if (d.cid === clientId || d.text === memo.value) return;
+        const s = memo.selectionStart, en = memo.selectionEnd;
+        memo.value = d.text; lastMemoSent = d.text;
+        try { memo.setSelectionRange(Math.min(s, d.text.length), Math.min(en, d.text.length)); } catch {}
+        $('memoStatus').textContent = '他の人が更新しました';
+      });
+    }
+
+    // ---------- 送信 ----------
+    let sending = false;
+    async function send() {
+      const text = input.value.trim();
+      if (!text || sending) return;
+      sending = true;
+      try {
+        const r = await fetch(api + '/messages', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: nick.value.trim(), text, cid: clientId }),
+        });
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({}));
+          toast(e.error || '送信できませんでした');
+        } else {
+          input.value = ''; autosize();
+          addMessage(await r.json());
+        }
+      } catch { toast('通信エラーです'); }
+      sending = false;
+      input.focus();
+    }
+    $('form').addEventListener('submit', (e) => { e.preventDefault(); send(); });
+    // 日本語入力の変換確定のEnterでは送信しない
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+        e.preventDefault(); send();
+      }
+    });
+    function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; }
+    input.addEventListener('input', autosize);
+
+    // ---------- メモ保存 ----------
+    async function saveMemo() {
+      const text = memo.value;
+      if (text === lastMemoSent) { $('memoStatus').textContent = '保存済み'; return; }
+      $('memoStatus').textContent = '保存中…';
+      try {
+        const r = await fetch(api + '/memo', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, cid: clientId }),
+        });
+        if (!r.ok) throw 0;
+        lastMemoSent = text;
+        $('memoStatus').textContent = '保存済み';
+      } catch { $('memoStatus').textContent = '保存できませんでした（再試行します）'; memoTimer = setTimeout(saveMemo, 3000); }
+    }
+    memo.addEventListener('input', () => {
+      $('memoStatus').textContent = '入力中…';
+      clearTimeout(memoTimer); memoTimer = setTimeout(saveMemo, 500);
+    });
+
+    load().then(connect).catch(() => { toast('読み込みに失敗しました'); connect(); });
+  }
+})();
+</script>
+</body>
+</html>
